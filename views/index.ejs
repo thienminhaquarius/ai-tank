@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>
+    <%= title %>
+  </title>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    /* canvas {
+      width: 70%;
+      height: 70%;
+    } */
+    #container {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container"></div>
+
+  <script src="ai_tankScripts/findRandom.js"></script>
+  <script src="ai_tankScripts/AStar1.js"></script>
+  <script src="ai_tankScripts/AStar2.js"></script>
+  <script src="ai_tankScripts/three.js"></script>
+  <script src="ai_tankScripts/mau.js"></script>
+  <script src="ai_tankScripts/keyevent.js"></script>
+  <script src="ai_tankScripts/scene.js"></script>
+  <script src="ai_tankScripts/CacHam.js"></script>
+  <script src="ai_tankScripts/VatTheObjects.js"></script>
+  <script src="ai_tankScripts/VatTheGraphics.js"></script>
+
+
+  <!-- <canvas id="myCanvas" width="200" height="100"></canvas> -->
+  <script>
+    var requestId
+    var container = document.getElementById('container');
+
+    var scene, camera, renderer;
+    checkBan = false;
+    var ambientLight, hemisphereLight, shadowLight;
+    createScene(container);
+    createLights();
+    var Direction = 1;
+    var world = [[]];
+    var DiemDau;
+    var DiemDich;
+    var duongdi;
+
+    var Nen;
+    function createNen() {
+      Nen = new nen();
+      Nen.mesh.position.z -= 0.5;
+      scene.add(Nen.mesh);
+
+    }
+    createNen();// tạo nền game		
+    //random tuong gach
+    var TuongGachX = new Array(90);
+    var TuongGachY = new Array(90);
+    for (var i = 0; i < TuongGachX.length; i++) {
+      if (Math.round(Math.random())) {
+        TuongGachX[i] = Math.floor((Math.random() * 13.5) + 1);
+      }
+      else {
+        TuongGachX[i] = Math.floor((Math.random() * -13.5) - 1);
+      }
+      if (Math.round(Math.random())) {
+        TuongGachY[i] = Math.floor((Math.random() * 8.5) + 1);
+      }
+      else {
+        TuongGachY[i] = Math.floor((Math.random() * -8.5) - 1);
+      }
+    }
+    var TuongGach = new Array(TuongGachX.length);
+
+    // hàm tạo tường gạch random đủ màu sắc
+    function createTuongGach() {
+      for (i = 0; i < TuongGachX.length; i++) {
+        TuongGach[i] = new tuongGach();
+        TuongGach[i].mesh.position.z += 0.5;
+        TuongGach[i].mesh.position.x = TuongGachX[i];
+        TuongGach[i].mesh.position.y = TuongGachY[i];
+        scene.add(TuongGach[i].mesh);
+      }
+    }
+    //tạo 4 trụ rào màu cam
+    var RaoX1, RaoX2, RaoY1, RaoY2;
+    function createHangRao() {
+      RaoX1 = new hangRaoY();
+      RaoX1.mesh.position.x += -17.4;
+      scene.add(RaoX1.mesh);
+
+      RaoX2 = new hangRaoY();
+      RaoX2.mesh.position.x += 17.4;
+      scene.add(RaoX2.mesh);
+
+      RaoY1 = new hangRaoX();
+      RaoY1.mesh.position.y += 12.4;
+      RaoY1.mesh.rotation.z += Math.PI * 0.5;
+      scene.add(RaoY1.mesh);
+
+      RaoY2 = new hangRaoX();
+      RaoY2.mesh.position.y -= 12.4;
+      RaoY2.mesh.rotation.z += Math.PI * 0.5;
+      scene.add(RaoY2.mesh);
+    }
+    createHangRao()
+    //tạo bản đồ 2D chiều world[][] từ hệ tọa độ 3D
+    function createWorld() {
+      for (var i = 0; i < 21; i++) {
+        world[i] = [];
+        for (var j = 0; j < 31; j++) {
+          world[i][j] = 0;
+        }
+      }
+      for (var i = 0; i < TuongGachX.length; i++) {
+        world[Math.abs(TuongGachY[i] - 10)][TuongGachX[i] + 15] = 1;
+      }
+    }
+    //tạo đạn Graphic
+    var MyTankDanG;//MyTank.Dan graphic
+    var ETankDanG = new Array(8);	// ETank.Dan graphic
+    function createVienDansG() {
+      MyTankDanG = new VienDan_Graphic();
+      MyTankDanG.matvienDan.color.setHex(0xEC7063);	// đổi màu viên đạn cho tường tank
+      MyTankDanG.mesh.position.z += 0.5;
+
+      ETankDanG[0] = new VienDan_Graphic();
+      ETankDanG[0].matvienDan.color.setHex(0xF1C40F);
+      ETankDanG[0].mesh.position.z += 0.5;
+
+      ETankDanG[1] = new VienDan_Graphic();
+      ETankDanG[1].mesh.position.z += 0.5;
+      ETankDanG[1].matvienDan.color.setHex(0x40ff00);
+
+      ETankDanG[2] = new VienDan_Graphic();
+      ETankDanG[2].mesh.position.z += 0.5;
+      for (var idan = 3; idan < 8; idan++)	// đạn của Tank mới theo yêu cầu của giảng viên
+      {
+        ETankDanG[idan] = new VienDan_Graphic();
+        ETankDanG[idan].mesh.position.z += 0.5;
+      }
+
+    }
+    // tạo tanks Graphic
+    var MyTankG;
+    var ETanksG = new Array(8);
+    function createTanksG() {
+      MyTankG = new MyTank_Graphic();
+      MyTankG.mesh.position.z += 0.25;
+      scene.add(MyTankG.mesh);
+
+      ETanksG[0] = new EnermyTank_Graphic();
+      ETanksG[0].mesh.position.z += 0.25;
+      scene.add(ETanksG[0].mesh);
+
+      ETanksG[1] = new EnermyTank_Graphic();
+      ETanksG[1].matNong.color.setHex(0x40ff00);
+      ETanksG[1].matDinh.color.setHex(0x40ff00);
+      ETanksG[1].mesh.position.z += 0.25;
+      scene.add(ETanksG[1].mesh);
+
+      ETanksG[2] = new EnermyTank_Graphic();
+      ETanksG[2].matNong.color.setHex(0xD2B4DE);
+      ETanksG[2].matDinh.color.setHex(0xD2B4DE);
+      ETanksG[2].mesh.position.z += 0.25;
+      scene.add(ETanksG[2].mesh);
+      for (var ietank = 3; ietank < 8; ietank++)	// đồ họa các tank mới theo yêu cầu của giảng viên
+      {
+        ETanksG[ietank] = new EnermyTank_Graphic();
+        ETanksG[ietank].mesh.position.z += 0.25;
+        scene.add(ETanksG[ietank].mesh);
+      }
+    }
+    // tao tank object
+    var MyTankO = new MyTank_Object(0, -10);
+    var ETankO = new Array(8);
+    ETankO[0] = new EnemyTank_Object(-15, 10, 0, 0);//toa do x,y loai tank, so thu tu tank
+    ETankO[1] = new EnemyTank_Object(15, 10, 1, 1);
+    ETankO[2] = new EnemyTank_Object(2, 10, 2, 2);
+    for (var ietank = 3; ietank < 8; ietank++)		// object các tank mới theo yêu cầu của giảng viên
+    {
+      ETankO[ietank] = new EnemyTank_Object(-15 + 3 * (ietank - 1), 10, 0, ietank);
+    }
+    // khởi tạo pause game
+    var PauseGame = false;
+    //input di chuyen		
+    var dX = 0;
+    var dY = 0;
+    //tốc độ enermyTank
+    var dE = 0.04;
+    // tốc độ  MyTank
+    var dM = 0.08;
+    var speedDan = 0.12;
+    var setCamera = true;
+
+    //thực thi các hàm create đồ họa
+    createVienDansG();
+    createTuongGach();
+    createWorld();
+    createTanksG();
+    camera.position.z = 28;
+    function xuLyCamera() {
+      if (setCamera) {
+        camera.position.x = MyTankO.X;// camera chạy theo MyTank
+        camera.position.y = MyTankO.Y;
+      }
+      else {
+        camera.position.x = 0;	// camera set ở trung tâm bản đồ
+        camera.position.y = 0;
+      }
+    }
+
+    function xuLy() {
+      if (PauseGame != true) {
+        //================Xử lý MyTank theo từng vòng lặp=============
+        MyTankO.diChuyen(dX, dY, MyTankG, ETankO);	// thực hiện hàm di chuyển
+        MyTankO.demColdDown();					// đếm ngược giá trị tìm đường
+        //thực thi bắn đạn nằm ở keyevent
+        if (MyTankO.Dan != undefined)	// nếu đạn được bắn thì xử lý đạn
+        {
+          MyTankO.Dan.diChuyen(MyTankDanG);// đạn bay (bao gồm hàm check va chạm tường)
+          if (vaChamDan_ETanks(MyTankO.Dan.X, MyTankO.Dan.Y, ETankO)) // đạn bay trúng một tỏng các ETank
+          {
+            MyTankO.Dan.length = -1;
+          }
+          if (MyTankO.Dan.length < 0)	//hủy viên đạn khi đã bay hết đường đạn hoặc va chạm tường, tank
+          {
+            scene.remove(MyTankDanG.mesh);
+            MyTankO.Dan = undefined;
+          }
+        }
+        //========== =======xử lý các Enermy Tank theo tường vòng lặp========================
+        for (var j = 0; j < 8; j++)// chạy lần lược các ETank
+        {
+          if (ETankO[j] == undefined)// xe ETank[i] đã bị tiêu diệt
+            continue;
+          ETankO[j].diChuyen(MyTankO, ETankO, ETanksG[j]); // ETank[i] di chuyển
+          ETankO[j].demColdDown();						// đếm ngược giá trị khi không di chuyển được
+
+          // tự động bắn khi khoảng các đến người chơi nhỏ hơn 4 ô
+          if ((Math.abs(ETankO[j].X - MyTankO.X) < 4 && Math.abs(ETankO[j].Y - MyTankO.Y) < 4)) {
+            ETankO[j].banDan(scene, ETankDanG[j]);// thực thi hàm bắn(nếu đạn sẵng sàng thì mới bắn được)
+          }
+          if (ETankO[j].Dan != undefined)	// xử lý đạn nếu đạn đã được bắn ra
+          {
+            ETankO[j].Dan.diChuyen(ETankDanG[j]);
+            if (vaChamDan_MyTank(ETankO[j].Dan.X, ETankO[j].Dan.Y, MyTankO)) {
+              ETankO[j].Dan.length = -1;
+              if (MyTankO.Mau >= 0)
+                text1.innerHTML = "Healths: " + MyTankO.Mau
+            }
+
+            if (ETankO[j].Dan.length < 0) {
+              scene.remove(ETankDanG[j].mesh);
+              ETankO[j].Dan = undefined;
+            }
+          }
+          if (ETankO[j].Mau == 0)// ETank[i] hết máu, bị xóa khỏi scene
+          {
+            scene.remove(ETanksG[j].mesh);
+            scene.remove(ETankDanG[j].mesh);
+            ETankO[j] = undefined;
+          }
+        }
+        //===============check các trạng thái kết thúc cuỷa trò choi=============
+        //thua
+        if (MyTankO.Mau < 0)	// MyTank hết máu
+        {
+          PauseGame = true;
+          alert("Lose, Page will reload!");
+          document.location.reload(true);
+        }
+        //thắng
+        var sotankdie = 0;//tìm số tank đã bị tiêu diệt
+        for (var i = 0; i < 8; i++)	// check trang thái các ETanks
+        {
+          if (ETankO[i] == undefined) {
+            sotankdie++;
+          }
+          else {
+            break;
+          }
+        }
+        if (sotankdie == 8)// các ETanks đều bị tiêu diệt
+        {
+          PauseGame = true;
+          alert("Win, Page will reload!");
+          location.reload(true);
+        }
+      }
+    }
+
+    var before, now, fps;
+    var checkFps = true;
+    before = Date.now();
+    fps = 0;
+
+    var framesPerSecond = 60;
+
+
+    function render() {	// vòng lập vô hạn
+      setTimeout(function () {
+        xuLyCamera();
+        xuLy();
+        requestAnimationFrame(render);
+        renderer.render(scene, camera);
+
+        //fps
+        if (checkFps) {
+          checkFps = false
+          now = Date.now();
+          fps = Math.round(1000 / (now - before));
+          before = now;
+          textFps.innerHTML = "FPS: " + fps;
+          setTimeout(function () {
+            checkFps = true
+          }, 500)
+        } else {
+          now = Date.now();
+          before = now;
+
+        }
+
+
+      }, 1000 / framesPerSecond)
+    };
+
+    render()
+
+    document.onkeydown = handleKeyDown;
+    document.onkeyup = handleKeyUp;
+
+    window.addEventListener('resize', function () {
+      camera.aspect = container.offsetWidth / container.offsetHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(container.offsetWidth, container.offsetHeight);
+    }, false)
+
+    var text1 = document.createElement('div');
+    text1.style.position = 'absolute';
+    text1.style.textShadow = " 2px 2px 4px #000000";
+    text1.style.color = "white";
+    text1.style.fontSize = 70 + "px"
+    text1.innerHTML = "Healths: " + 5
+
+    text1.style.top = 20 + 'px';
+    text1.style.right = 100 + 'px';
+    container.appendChild(text1);
+
+    var textFps = document.createElement('div');
+    textFps.style.position = 'absolute';
+    textFps.style.textShadow = " 2px 2px 4px #000000";
+    textFps.style.color = "white";
+    textFps.style.fontSize = 40 + "px"
+    textFps.innerHTML = "FPS: ";
+
+    textFps.style.top = 100 + 'px';
+    textFps.style.right = 100 + 'px';
+    container.appendChild(textFps);
+
+    //Text
+    var text2 = document.createElement('div');
+    text2.style.position = 'absolute';
+    text2.style.textShadow = " 2px 2px 4px #000000";
+    text2.style.color = "white";
+    text2.style.fontSize = 32 + "px"
+    text2.innerHTML = "<p>Arrows: Move</p>" +
+      "<p>Space: Shoot</p>" + "<p>Q/E: Zoom</p>" + "<p>F: Pause Game</p>" + "<p>S: Toggle Camera</p>";
+    text2.style.top = 20 + 'px';
+    text2.style.left = 50 + 'px';
+    container.appendChild(text2);
+
+
+  </script>
+
+</body>
+
+</html>
